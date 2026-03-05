@@ -1,0 +1,5 @@
+node_modules/
+dist/
+release/
+save-credentials.js
+.env
