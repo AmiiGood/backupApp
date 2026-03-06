@@ -158,6 +158,146 @@ function registerBackupHandlers(ipcMain, getWindow) {
       return { error: err.message };
     }
   });
+
+  ipcMain.handle("start-backup-nas", async (_, { folders, nasConfig }) => {
+    try {
+      const results = [];
+
+      for (let i = 0; i < folders.length; i++) {
+        const folderPath = folders[i];
+        const folderName = path.basename(folderPath);
+        const zipName = `backup-${folderName}-${Date.now()}.zip`;
+        const zipPath = path.join(os.tmpdir(), zipName);
+
+        send({
+          status: "compressing",
+          folder: folderName,
+          progress: 0,
+          step: i + 1,
+          total: folders.length,
+        });
+
+        await compressFolder(folderPath, zipPath, (pct) => {
+          send({
+            status: "compressing",
+            folder: folderName,
+            progress: Math.round(pct * 0.5),
+            step: i + 1,
+            total: folders.length,
+          });
+        });
+
+        send({
+          status: "uploading",
+          folder: folderName,
+          progress: 50,
+          step: i + 1,
+          total: folders.length,
+        });
+
+        await uploadToNAS(zipPath, zipName, nasConfig);
+
+        fs.unlinkSync(zipPath);
+        send({
+          status: "done",
+          folder: folderName,
+          progress: 100,
+          step: i + 1,
+          total: folders.length,
+        });
+        results.push({ folder: folderName, date: new Date().toISOString() });
+      }
+
+      return { success: true, results };
+    } catch (err) {
+      return { error: err.message };
+    }
+  });
+
+  ipcMain.handle("list-backups-nas", async (_, nasConfig) => {
+    try {
+      const { createClient } = await import("webdav");
+      const { ip, port, username, password, folder } = nasConfig;
+      const client = createClient(`http://${ip}:${port}`, {
+        username,
+        password,
+      });
+
+      const files = await client.getDirectoryContents(folder);
+      const zips = files
+        .filter((f) => f.basename.endsWith(".zip"))
+        .map((f) => ({
+          id: f.filename,
+          name: f.basename,
+          size: f.size,
+          createdTime: f.lastmod,
+        }));
+
+      return { success: true, files: zips };
+    } catch (err) {
+      return { error: err.message };
+    }
+  });
+
+  ipcMain.handle(
+    "start-restore-nas",
+    async (_, { filePath, destPath, nasConfig }) => {
+      try {
+        const { createClient } = await import("webdav");
+        const { ip, port, username, password } = nasConfig;
+        const client = createClient(`http://${ip}:${port}`, {
+          username,
+          password,
+        });
+
+        send({ status: "downloading", progress: 0 });
+
+        const fileName = path.basename(filePath);
+        const zipPath = path.join(os.tmpdir(), fileName);
+
+        const fileBuffer = await client.getFileContents(filePath);
+        fs.writeFileSync(zipPath, Buffer.from(fileBuffer));
+
+        send({ status: "extracting", progress: 80 });
+
+        const extractTo =
+          destPath || path.join(os.homedir(), "Desktop", "restored-backup");
+        fs.mkdirSync(extractTo, { recursive: true });
+
+        await extractZip(zipPath, { dir: extractTo });
+        fs.unlinkSync(zipPath);
+
+        send({ status: "done", progress: 100, path: extractTo });
+        return { success: true, path: extractTo };
+      } catch (err) {
+        return { error: err.message };
+      }
+    },
+  );
+
+  ipcMain.handle("save-nas-config", (_, config) => {
+    store.set("nasConfig", config);
+    return { success: true };
+  });
+
+  ipcMain.handle("get-nas-config", () => {
+    return store.get("nasConfig", null);
+  });
+
+  ipcMain.handle("test-nas", async (_, nasConfig) => {
+    try {
+      const { createClient } = await import("webdav");
+      const { ip, port, username, password, folder } = nasConfig;
+      const client = createClient(`http://${ip}:${port}`, {
+        username,
+        password,
+      });
+      await client.getDirectoryContents(folder);
+      return { success: true };
+    } catch (err) {
+      return { error: err.message };
+    }
+  });
 }
 
 function getFolderSize(folderPath) {
@@ -247,6 +387,15 @@ function downloadFromDrive(drive, fileId, destPath, fileSize, onProgress) {
       reject(err);
     }
   });
+}
+
+async function uploadToNAS(localPath, fileName, config) {
+  const { createClient } = await import("webdav");
+  const { ip, port, username, password, folder } = config;
+  const client = createClient(`http://${ip}:${port}`, { username, password });
+  const remotePath = `${folder}/${fileName}`.replace("//", "/");
+  const fileStream = fs.createReadStream(localPath);
+  await client.putFileContents(remotePath, fileStream, { overwrite: true });
 }
 
 module.exports = { registerBackupHandlers };

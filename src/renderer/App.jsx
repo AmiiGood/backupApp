@@ -22,28 +22,18 @@ const css = `
   body { background: var(--bg); color: var(--text); font-family: var(--sans); }
   .app { min-height: 100vh; display: flex; flex-direction: column; }
 
-  .header {
-    padding: 24px 36px 0;
-    display: flex;
-    align-items: flex-end;
-    justify-content: space-between;
-    border-bottom: 1px solid var(--border);
-  }
-
+  .header { padding: 24px 36px 0; display: flex; align-items: flex-end; justify-content: space-between; border-bottom: 1px solid var(--border); }
   .logo { font-family: var(--mono); font-size: 13px; font-weight: 500; letter-spacing: 0.08em; color: var(--text); text-transform: uppercase; padding-bottom: 20px; }
   .logo span { color: var(--accent); }
-
   .nav { display: flex; }
   .nav-btn { font-family: var(--mono); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; padding: 14px 20px; border: none; background: transparent; color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.15s; position: relative; top: 1px; }
   .nav-btn:hover { color: var(--text); }
   .nav-btn.active { color: var(--text); border-bottom-color: var(--accent); }
-
   .status-dot { display: flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 11px; color: var(--muted); padding-bottom: 20px; letter-spacing: 0.04em; }
   .dot { width: 6px; height: 6px; border-radius: 50%; background: #ccc; }
   .dot.on { background: var(--accent); box-shadow: 0 0 0 3px var(--accent-light); }
 
   .content { padding: 36px; flex: 1; max-width: 680px; }
-
   .section-label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); margin-bottom: 16px; }
 
   .alert { font-family: var(--mono); font-size: 12px; padding: 12px 16px; border-radius: 4px; margin-bottom: 20px; border-left: 3px solid; letter-spacing: 0.02em; }
@@ -54,6 +44,7 @@ const css = `
   .quick-folders { display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; }
   .quick-btn { font-family: var(--mono); font-size: 11px; letter-spacing: 0.04em; padding: 8px 14px; border: 1px solid var(--border); border-radius: 4px; background: var(--surface); color: var(--muted); cursor: pointer; transition: all 0.15s; }
   .quick-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-light); }
+  .quick-btn.selected { border-color: var(--accent); color: var(--accent); background: var(--accent-light); }
   .quick-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
   .folder-list { margin-bottom: 20px; }
@@ -67,7 +58,6 @@ const css = `
   .btn-remove:hover { color: var(--danger); background: var(--danger-light); }
 
   .actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
-
   .btn { font-family: var(--mono); font-size: 12px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; padding: 11px 20px; border-radius: 5px; border: 1px solid; cursor: pointer; transition: all 0.15s; }
   .btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
   .btn-primary:hover { background: #235c3e; border-color: #235c3e; }
@@ -119,6 +109,92 @@ const OS_FOLDERS = [
   { label: "Imágenes", key: "Pictures" },
   { label: "Música", key: "Music" },
 ];
+
+function NasConfig({ nasConfig, onSave, showMsg }) {
+  const [ip, setIp] = useState(nasConfig?.ip || "");
+  const [port, setPort] = useState(nasConfig?.port || "5005");
+  const [username, setUsername] = useState(nasConfig?.username || "");
+  const [password, setPassword] = useState(nasConfig?.password || "");
+  const [folder, setFolder] = useState(nasConfig?.folder || "/backups");
+  const [testing, setTesting] = useState(false);
+
+  async function handleSave() {
+    if (!ip || !username || !password)
+      return showMsg("Completa IP, usuario y contraseña", "error");
+    const config = { ip, port, username, password, folder };
+    await window.api.saveNasConfig(config);
+    onSave(config);
+    showMsg("Configuración NAS guardada", "success");
+  }
+
+  async function handleTest() {
+    if (!ip || !username || !password)
+      return showMsg("Completa los campos primero", "error");
+    setTesting(true);
+    const res = await window.api.testNas({
+      ip,
+      port,
+      username,
+      password,
+      folder,
+    });
+    setTesting(false);
+    if (res.error) return showMsg(`Error: ${res.error}`, "error");
+    showMsg("Conexión al NAS exitosa", "success");
+  }
+
+  return (
+    <div className="config-row">
+      <div className="config-label">NAS (WebDAV)</div>
+      <div className="config-desc">
+        Configura tu NAS Ugreen para usarlo como destino de backup.
+      </div>
+      <input
+        className="input"
+        placeholder="IP del NAS (ej. 192.168.100.10)"
+        value={ip}
+        onChange={(e) => setIp(e.target.value)}
+      />
+      <input
+        className="input"
+        placeholder="Puerto (5005)"
+        value={port}
+        onChange={(e) => setPort(e.target.value)}
+      />
+      <input
+        className="input"
+        placeholder="Usuario"
+        value={username}
+        onChange={(e) => setUsername(e.target.value)}
+      />
+      <input
+        className="input"
+        placeholder="Contraseña"
+        type="password"
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+      />
+      <input
+        className="input"
+        placeholder="Carpeta destino (ej. /backups)"
+        value={folder}
+        onChange={(e) => setFolder(e.target.value)}
+      />
+      <div className="actions">
+        <button
+          className="btn btn-secondary"
+          onClick={handleTest}
+          disabled={testing}
+        >
+          {testing ? "Probando..." : "Probar conexión"}
+        </button>
+        <button className="btn btn-primary" onClick={handleSave}>
+          Guardar
+        </button>
+      </div>
+    </div>
+  );
+}
 
 function ConfigCredentials({ isAuth, onAuthSuccess, showMsg }) {
   const [clientId, setClientId] = useState("");
@@ -192,7 +268,6 @@ function ConfigCredentials({ isAuth, onAuthSuccess, showMsg }) {
           {hasCreds ? "Actualizar credenciales" : "Guardar credenciales"}
         </button>
       </div>
-
       <div className="config-row">
         <div className="config-label">Google Drive</div>
         <div className="config-desc">
@@ -210,7 +285,6 @@ function ConfigCredentials({ isAuth, onAuthSuccess, showMsg }) {
           </button>
         </div>
       </div>
-
       {!isAuth && hasCreds && (
         <div className="config-row">
           <div className="config-label">Código de autorización</div>
@@ -237,22 +311,31 @@ export default function App() {
   const [folders, setFolders] = useState([]);
   const [folderSizes, setFolderSizes] = useState({});
   const [backups, setBackups] = useState([]);
+  const [nasBackups, setNasBackups] = useState([]);
   const [isAuth, setIsAuth] = useState(false);
-  const [authCode, setAuthCode] = useState("");
   const [progress, setProgress] = useState(null);
   const [msg, setMsg] = useState(null);
   const [loading, setLoading] = useState(false);
   const [restoreDest, setRestoreDest] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null);
+  const [destination, setDestination] = useState("drive");
+  const [nasConfig, setNasConfig] = useState(null);
+  const [restoreSource, setRestoreSource] = useState("drive");
 
   useEffect(() => {
     checkAuth();
     window.api.onProgress((data) => setProgress(data));
+    window.api.getNasConfig().then((c) => {
+      if (c) setNasConfig(c);
+    });
   }, []);
 
   useEffect(() => {
-    if (tab === "restore" && isAuth) loadBackups();
-  }, [tab, isAuth]);
+    if (tab === "restore") {
+      if (restoreSource === "drive" && isAuth) loadBackups();
+      if (restoreSource === "nas" && nasConfig) loadBackupsNas();
+    }
+  }, [tab, restoreSource, isAuth, nasConfig]);
 
   async function checkAuth() {
     const auth = await window.api.isAuthenticated();
@@ -273,15 +356,13 @@ export default function App() {
   }
 
   async function handleQuickFolder(key) {
-    const userProfile = "C:\\Users\\" + (await getUserName());
-    const path = `${userProfile}\\${key}`;
-    await addFolder(path);
+    const userProfile = `C:\\Users\\${await getUsername()}`;
+    await addFolder(`${userProfile}\\${key}`);
   }
 
-  async function getUserName() {
+  async function getUsername() {
     const res = await window.api.getConfig();
-    if (res.username) return res.username;
-    return "kiosco1";
+    return res.username || require("os")?.userInfo?.()?.username || "user";
   }
 
   function removeFolder(path) {
@@ -295,17 +376,35 @@ export default function App() {
 
   async function handleBackup() {
     if (!folders.length) return showMsg("Agrega al menos una carpeta", "error");
-    if (!isAuth)
+    if ((destination === "drive" || destination === "both") && !isAuth)
       return showMsg("Primero autentícate con Google Drive", "error");
+    if ((destination === "nas" || destination === "both") && !nasConfig)
+      return showMsg("Configura el NAS primero en Config", "error");
+
     setLoading(true);
     setProgress({ status: "starting", progress: 0 });
-    const res = await window.api.startBackup(folders.map((f) => f.path));
+
+    if (destination === "drive" || destination === "both") {
+      const res = await window.api.startBackup(folders.map((f) => f.path));
+      if (res.error) {
+        setLoading(false);
+        return showMsg(`Drive: ${res.error}`, "error");
+      }
+    }
+
+    if (destination === "nas" || destination === "both") {
+      const res = await window.api.startBackupNas({
+        folders: folders.map((f) => f.path),
+        nasConfig,
+      });
+      if (res.error) {
+        setLoading(false);
+        return showMsg(`NAS: ${res.error}`, "error");
+      }
+    }
+
     setLoading(false);
-    if (res.error) return showMsg(res.error, "error");
-    showMsg(
-      `${res.results.length} carpeta(s) respaldadas correctamente`,
-      "success",
-    );
+    showMsg("Backup completado correctamente", "success");
     setProgress(null);
   }
 
@@ -315,6 +414,20 @@ export default function App() {
     const res = await window.api.startRestore({
       fileId,
       destPath: restoreDest,
+    });
+    setLoading(false);
+    if (res.error) return showMsg(res.error, "error");
+    showMsg(`Restaurado en: ${res.path}`, "success");
+    setProgress(null);
+  }
+
+  async function handleRestoreNas(filePath) {
+    setLoading(true);
+    setProgress({ status: "downloading", progress: 0 });
+    const res = await window.api.startRestoreNas({
+      filePath,
+      destPath: restoreDest,
+      nasConfig,
     });
     setLoading(false);
     if (res.error) return showMsg(res.error, "error");
@@ -336,32 +449,15 @@ export default function App() {
     showMsg("Backup eliminado", "success");
   }
 
-  async function handleAuth() {
-    const res = await window.api.getAuthUrl();
-    if (res?.error) return showMsg(res.error, "error");
-    if (res?.url) {
-      navigator.clipboard.writeText(res.url);
-      showMsg(
-        "URL copiada. Pégala en tu navegador si no se abrió sola.",
-        "info",
-      );
-    } else {
-      showMsg("Se abrió el navegador. Copia el código y pégalo abajo.", "info");
-    }
-  }
-
-  async function handleAuthCode() {
-    if (!authCode.trim()) return;
-    const res = await window.api.setAuthCode(authCode.trim());
-    if (res.error) return showMsg(res.error, "error");
-    setIsAuth(true);
-    setAuthCode("");
-    showMsg("Autenticado correctamente", "success");
-  }
-
   async function loadBackups() {
     const res = await window.api.listBackups();
     if (res.success) setBackups(res.files);
+  }
+
+  async function loadBackupsNas() {
+    if (!nasConfig) return;
+    const res = await window.api.listBackupsNas(nasConfig);
+    if (res.success) setNasBackups(res.files);
   }
 
   function showMsg(text, type = "info") {
@@ -401,6 +497,7 @@ export default function App() {
   }
 
   const totalSize = Object.values(folderSizes).reduce((a, b) => a + b, 0);
+  const activeBackups = restoreSource === "drive" ? backups : nasBackups;
 
   return (
     <>
@@ -467,6 +564,23 @@ export default function App() {
 
           {tab === "backup" && (
             <>
+              <div className="section-label">Destino</div>
+              <div className="quick-folders" style={{ marginBottom: 24 }}>
+                {[
+                  ["drive", "☁ Google Drive"],
+                  ["nas", "🖥 NAS"],
+                  ["both", "☁ + 🖥 Ambos"],
+                ].map(([id, label]) => (
+                  <button
+                    key={id}
+                    className={`quick-btn ${destination === id ? "selected" : ""}`}
+                    onClick={() => setDestination(id)}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+
               <div className="section-label">Acceso rápido</div>
               <div className="quick-folders">
                 {OS_FOLDERS.map((f) => (
@@ -474,7 +588,7 @@ export default function App() {
                     key={f.key}
                     className="quick-btn"
                     onClick={() => handleQuickFolder(f.key)}
-                    disabled={folders.some((x) => x.path.endsWith(f.key))}
+                    disabled={folders.some((x) => x.name === f.key)}
                   >
                     {f.label}
                   </button>
@@ -554,6 +668,22 @@ export default function App() {
 
           {tab === "restore" && (
             <>
+              <div className="section-label">Fuente</div>
+              <div className="quick-folders" style={{ marginBottom: 24 }}>
+                {[
+                  ["drive", "☁ Google Drive"],
+                  ["nas", "🖥 NAS"],
+                ].map(([id, label]) => (
+                  <button
+                    key={id}
+                    className={`quick-btn ${restoreSource === id ? "selected" : ""}`}
+                    onClick={() => setRestoreSource(id)}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+
               <div className="section-label">Destino de restauración</div>
               <div className="dest-row">
                 <div className="dest-path">
@@ -569,16 +699,21 @@ export default function App() {
               </div>
 
               <div className="section-label">Backups disponibles</div>
-              {!isAuth && (
+              {restoreSource === "drive" && !isAuth && (
                 <div className="alert error">
                   Conéctate a Google Drive en Configuración
                 </div>
               )}
-              {isAuth && backups.length === 0 && (
+              {restoreSource === "nas" && !nasConfig && (
+                <div className="alert error">
+                  Configura el NAS en Configuración
+                </div>
+              )}
+              {activeBackups.length === 0 && (
                 <div className="empty">no se encontraron backups</div>
               )}
 
-              {backups.map((b) => (
+              {activeBackups.map((b) => (
                 <div key={b.id} className="backup-item">
                   <div>
                     <div className="backup-name">{cleanBackupName(b.name)}</div>
@@ -587,15 +722,21 @@ export default function App() {
                     </div>
                   </div>
                   <div className="backup-actions">
-                    <button
-                      className="btn-danger-ghost"
-                      onClick={() => setConfirmDelete(b)}
-                    >
-                      Eliminar
-                    </button>
+                    {restoreSource === "drive" && (
+                      <button
+                        className="btn-danger-ghost"
+                        onClick={() => setConfirmDelete(b)}
+                      >
+                        Eliminar
+                      </button>
+                    )}
                     <button
                       className="btn btn-secondary"
-                      onClick={() => handleRestore(b.id)}
+                      onClick={() =>
+                        restoreSource === "drive"
+                          ? handleRestore(b.id)
+                          : handleRestoreNas(b.id)
+                      }
                       disabled={loading}
                     >
                       Restaurar
@@ -619,13 +760,16 @@ export default function App() {
                 </div>
               )}
 
-              {isAuth && (
-                <div style={{ marginTop: 20 }}>
-                  <button className="btn-ghost" onClick={loadBackups}>
-                    ↺ Actualizar lista
-                  </button>
-                </div>
-              )}
+              <div style={{ marginTop: 20 }}>
+                <button
+                  className="btn-ghost"
+                  onClick={() =>
+                    restoreSource === "drive" ? loadBackups() : loadBackupsNas()
+                  }
+                >
+                  ↺ Actualizar lista
+                </button>
+              </div>
             </>
           )}
 
@@ -634,6 +778,11 @@ export default function App() {
               <ConfigCredentials
                 isAuth={isAuth}
                 onAuthSuccess={() => setIsAuth(true)}
+                showMsg={showMsg}
+              />
+              <NasConfig
+                nasConfig={nasConfig}
+                onSave={setNasConfig}
                 showMsg={showMsg}
               />
             </>

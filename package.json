@@ -14,7 +14,8 @@
     "extract-zip": "^2.0.1",
     "googleapis": "^144.0.0",
     "react": "^18.2.0",
-    "react-dom": "^18.2.0"
+    "react-dom": "^18.2.0",
+    "webdav": "^5.9.0"
   },
   "devDependencies": {
     "@electron/rebuild": "^3.6.0",
